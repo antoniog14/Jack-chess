@@ -1,0 +1,268 @@
+class ChessGame {
+    field Board board;
+    field int cursorX, cursorY;
+    field int selectedX, selectedY;
+    field boolean hasSelection;
+    field boolean whiteTurn;
+
+    field boolean whiteKingMoved;
+    field boolean whiteRookA_Moved;
+    field boolean whiteRookH_Moved;
+    field boolean blackKingMoved;
+    field boolean blackRookA_Moved;
+    field boolean blackRookH_Moved;
+
+    field String msgWhiteTurn;
+    field String msgBlackTurn;
+
+    constructor ChessGame new() {
+        var int seed;
+        var boolean flip;
+        var String startMsg;
+        
+        let cursorX = 4;
+        let cursorY = 4;
+        let selectedX = -1;
+        let selectedY = -1;
+        let hasSelection = false;
+        let whiteTurn = true;
+
+        let whiteKingMoved = false;
+        let whiteRookA_Moved = false;
+        let whiteRookH_Moved = false;
+        let blackKingMoved = false;
+        let blackRookA_Moved = false;
+        let blackRookH_Moved = false;
+
+        let msgWhiteTurn = "NA REDU JE: BIJELI ";
+        let msgBlackTurn = "NA REDU JE: CRNI   ";
+
+        let startMsg = "PRITISNITE BILO KOJU TIPKU ZA START";
+        do Output.moveCursor(10, 15);
+        do Output.printString(startMsg);
+        
+        let seed = 0;
+        while (Keyboard.keyPressed() = 0) {
+            let seed = seed + 1;
+            if (seed > 32760) { let seed = 0; }
+        }
+        
+        if (((seed - (seed / 2 * 2)) = 1)) { let flip = true; } else { let flip = false; }
+        
+        do Screen.clearScreen();
+        do startMsg.dispose(); 
+
+        let board = Board.new(flip);
+        return this;
+    }
+
+    method void run() {
+        var char key;
+        var boolean exit;
+        let exit = false;
+
+        do board.drawStaticElements(); 
+
+        do board.draw(cursorX, cursorY, selectedX, selectedY);
+        do printTurnMessage();
+
+        while (~exit) {
+            while (key = 0) { let key = Keyboard.keyPressed(); }
+            if (key = 140) { let exit = true; } // ESC
+
+            if (key = 131) { if (cursorY > 0) { let cursorY = cursorY - 1; } }
+            if (key = 133) { if (cursorY < 7) { let cursorY = cursorY + 1; } }
+            if (key = 130) { if (cursorX > 0) { let cursorX = cursorX - 1; } }
+            if (key = 132) { if (cursorX < 7) { let cursorX = cursorX + 1; } }
+
+            if ((key = 128) | (key = 32)) { do handleAction(); }
+
+            do board.draw(cursorX, cursorY, selectedX, selectedY);
+            do printTurnMessage();
+
+            do Sys.wait(150);
+            while (~(key = 0)) { let key = Keyboard.keyPressed(); }
+        }
+        return;
+    }
+
+    method void handleAction() {
+        var int p, absP, dX, dY;
+        var boolean moved;
+        var String whiteWinMsg, blackWinMsg;
+        
+        if (~hasSelection) {
+            let p = board.getPiece(cursorX, cursorY);
+            if (~(p = 0)) {
+                if ((whiteTurn & (p > 0)) | (~whiteTurn & (p < 0))) {
+                    let selectedX = cursorX;
+                    let selectedY = cursorY;
+                    let hasSelection = true;
+                }
+            }
+        } else {
+            if ((selectedX = cursorX) & (selectedY = cursorY)) {
+                let selectedX = -1; let selectedY = -1; let hasSelection = false;
+            } else {
+                let p = board.getPiece(selectedX, selectedY);
+                let absP = Math.abs(p);
+                let dX = cursorX - selectedX;
+                let dY = cursorY - selectedY;
+                let moved = false;
+
+                // rokada
+                if ((absP = 6) & ((dX = 2) | (dX = -2))) {
+                    if (whiteTurn) {
+                        if (~whiteKingMoved) {
+                            if ((dX = 2) & (~whiteRookH_Moved)) {
+                                if (board.executeCastle(selectedX, selectedY, cursorX, cursorY, 7, 5)) {
+                                    let whiteKingMoved = true; let whiteRookH_Moved = true; let moved = true;
+                                }
+                            }
+                            if ((dX = -2) & (~whiteRookA_Moved)) {
+                                if (board.executeCastle(selectedX, selectedY, cursorX, cursorY, 0, 3)) {
+                                    let whiteKingMoved = true; let whiteRookA_Moved = true; let moved = true;
+                                }
+                            }
+                        }
+                    } else {
+                        if (~blackKingMoved) {
+                            if ((dX = 2) & (~blackRookH_Moved)) {
+                                if (board.executeCastle(selectedX, selectedY, cursorX, cursorY, 7, 5)) {
+                                    let blackKingMoved = true; let blackRookH_Moved = true; let moved = true;
+                                }
+                            }
+                            if ((dX = -2) & (~blackRookA_Moved)) {
+                                if (board.executeCastle(selectedX, selectedY, cursorX, cursorY, 0, 3)) {
+                                    let blackKingMoved = true; let blackRookA_Moved = true; let moved = true;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // potez
+                if (~moved) {
+                    if (board.movePiece(selectedX, selectedY, cursorX, cursorY)) {
+                        let moved = true;
+                        
+                        if (selectedX = 4) {
+                            if (selectedY = 7) { if (~(board.isFlipped())) { let whiteKingMoved = true; } else { let blackKingMoved = true; } }
+                            if (selectedY = 0) { if (~(board.isFlipped())) { let blackKingMoved = true; } else { let whiteKingMoved = true; } }
+                        }
+                        if (selectedX = 0) {
+                            if (selectedY = 7) { if (~(board.isFlipped())) { let whiteRookA_Moved = true; } else { let blackRookA_Moved = true; } }
+                            if (selectedY = 0) { if (~(board.isFlipped())) { let blackRookA_Moved = true; } else { let whiteRookA_Moved = true; } }
+                        }
+                        if (selectedX = 7) {
+                            if (selectedY = 7) { if (~(board.isFlipped())) { let whiteRookH_Moved = true; } else { let blackRookH_Moved = true; } }
+                            if (selectedY = 0) { if (~(board.isFlipped())) { let blackRookH_Moved = true; } else { let whiteRookH_Moved = true; } }
+                        }
+                    }
+                }
+
+                if (moved) {
+                    if ((absP = 1) & ((dY = 2) | (dY = -2))) {
+                        do board.setEnPassantTarget(cursorX);
+                    } else {
+                        do board.clearEnPassantTarget(); 
+                    }
+
+                    if (board.checkPromotion(cursorX, cursorY)) {
+                        do handlePromotion(cursorX, cursorY);
+                    }
+
+                    let whiteTurn = ~whiteTurn;
+                    if (board.isCheckmate(whiteTurn)) {
+                        do Screen.clearScreen(); do Output.moveCursor(10, 25);
+                        if (whiteTurn) { 
+                            let blackWinMsg = "SAH-MAT! CRNI JE POBIJEDIO!";
+                            do Output.printString(blackWinMsg); 
+                            do blackWinMsg.dispose();
+                        }
+                        else { 
+                            let whiteWinMsg = "SAH-MAT! BIJELI JE POBIJEDIO!";
+                            do Output.printString(whiteWinMsg); 
+                            do whiteWinMsg.dispose();
+                        }
+                        do Sys.wait(5000); do Sys.halt();
+                    }
+                }
+
+                let selectedX = -1; let selectedY = -1; let hasSelection = false;
+            }
+        }
+        return;
+    }
+
+    method void handlePromotion(int x, int y) {
+        var char key;
+        var int chosenPiece;
+        var boolean validChoice;
+        var boolean isPieceWhite;
+        var String promMsg, optMsg;
+
+        if (board.getPiece(x, y) > 0) { let isPieceWhite = true; } else { let isPieceWhite = false; }
+
+        do Screen.clearScreen();
+        do Output.moveCursor(3, 12);
+        let promMsg = "PROMOCIJA! ODABERITE NOVU FIGURU (1-5):";
+        do Output.printString(promMsg);
+
+        if (isPieceWhite) { do board.drawVectorPiece(4, 130, 80); } else { do board.drawVectorPiece(-4, 130, 80); }
+        do Output.moveCursor(11, 17); do Output.printString("1");
+
+        if (isPieceWhite) { do board.drawVectorPiece(2, 190, 80); } else { do board.drawVectorPiece(-2, 190, 80); }
+        do Output.moveCursor(11, 25); do Output.printString("2");
+
+        if (isPieceWhite) { do board.drawVectorPiece(3, 250, 80); } else { do board.drawVectorPiece(-3, 250, 80); }
+        do Output.moveCursor(11, 32); do Output.printString("3");
+
+        if (isPieceWhite) { do board.drawVectorPiece(5, 310, 80); } else { do board.drawVectorPiece(-5, 310, 80); }
+        do Output.moveCursor(11, 40); do Output.printString("4");
+
+        if (isPieceWhite) { do board.drawVectorPiece(1, 370, 80); } else { do board.drawVectorPiece(-1, 370, 80); }
+        do Output.moveCursor(11, 47); 
+        let optMsg = "5 (Preskoci)";
+        do Output.printString(optMsg);
+
+        let validChoice = false;
+        while (~validChoice) {
+            let key = Keyboard.keyPressed();
+            if ((key > 48) & (key < 54)) {
+                let validChoice = true;
+                if (key = 49) { let chosenPiece = 4; }
+                if (key = 50) { let chosenPiece = 2; }
+                if (key = 51) { let chosenPiece = 3; }
+                if (key = 52) { let chosenPiece = 5; }
+                if (key = 53) { let chosenPiece = 1; }
+            }
+        }
+
+        if (~isPieceWhite) { let chosenPiece = -chosenPiece; }
+        do board.setPiece(x, y, chosenPiece);
+        
+        do promMsg.dispose();
+        do optMsg.dispose();
+        do Screen.clearScreen();
+        return;
+    }
+
+    method void printTurnMessage() {
+        do Output.moveCursor(1, 1);
+        if (whiteTurn) { 
+            do Output.printString(msgWhiteTurn); 
+        } else { 
+            do Output.printString(msgBlackTurn); 
+        }
+        return;
+    }
+
+    method void dispose() {
+        do msgWhiteTurn.dispose();
+        do msgBlackTurn.dispose();
+        do board.dispose(); 
+        do Memory.deAlloc(this); 
+        return;
+    }
+}

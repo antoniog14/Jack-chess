@@ -1,0 +1,376 @@
+class Board {
+    field Array squares;
+    field boolean isFlipped;
+    
+    field int enPassantValidColumn;
+
+    constructor Board new(boolean flip) {
+        let squares = Array.new(64);
+        let isFlipped = flip;
+        let enPassantValidColumn = -1; 
+        do initBoard();
+        return this;
+    }
+
+    method boolean isFlipped() { return isFlipped; }
+    method void setEnPassantTarget(int col) { let enPassantValidColumn = col; return; }
+    method void clearEnPassantTarget() { let enPassantValidColumn = -1; return; }
+
+    method void initBoard() {
+        var int i;
+        let i = 0;
+        while (i < 64) { let squares[i] = 0; let i = i + 1; }
+
+        if (~isFlipped) {
+            let squares[0] = -4; let squares[1] = -2; let squares[2] = -3; let squares[3] = -5;
+            let squares[4] = -6; let squares[5] = -3; let squares[6] = -2; let squares[7] = -4;
+            let i = 8; while (i < 16) { let squares[i] = -1; let i = i + 1; }
+            let i = 48; while (i < 56) { let squares[i] = 1; let i = i + 1; }
+            let squares[56] = 4; let squares[57] = 2; let squares[58] = 3; let squares[59] = 5;
+            let squares[60] = 6; let squares[61] = 3; let squares[62] = 2; let squares[63] = 4;
+        } else {
+            let squares[0] = 4; let squares[1] = 2; let squares[2] = 3; let squares[3] = 5;
+            let squares[4] = 6; let squares[5] = 3; let squares[6] = 2; let squares[7] = 4;
+            let i = 8; while (i < 16) { let squares[i] = 1; let i = i + 1; }
+            let i = 48; while (i < 56) { let squares[i] = -1; let i = i + 1; }
+            let squares[56] = -4; let squares[57] = -2; let squares[58] = -3; let squares[59] = -5;
+            let squares[60] = -6; let squares[61] = -3; let squares[62] = -2; let squares[63] = -4;
+        }
+        return;
+    }
+
+    method boolean checkPromotion(int x, int y) {
+        var int piece, absP;
+        let piece = squares[(y * 8) + x];
+        let absP = Math.abs(piece);
+        if (absP = 1) {
+            if (y = 0) { return true; }
+            if (y = 7) { return true; }
+        }
+        return false;
+    }
+
+    method void setPiece(int x, int y, int piece) {
+        let squares[(y * 8) + x] = piece;
+        return;
+    }
+
+    method boolean executeCastle(int kFromX, int kFromY, int kToX, int kToY, int rFromX, int rToX) {
+        var int step, cx, kingPiece, rookPiece;
+        var boolean isWhite;
+        
+        let kingPiece = squares[(kFromY * 8) + kFromX];
+        let rookPiece = squares[(kFromY * 8) + rFromX];
+        let isWhite = (kingPiece > 0);
+
+        if (isSquareAttacked(kFromX, kFromY, ~isWhite)) { return false; }
+
+        if (kToX > kFromX) { let step = 1; } else { let step = -1; }
+        let cx = kFromX + step;
+        while (~(cx = rFromX)) {
+            if (~(squares[(kFromY * 8) + cx] = 0)) { return false; }
+            let cx = cx + step;
+        }
+
+        if (isSquareAttacked(kFromX + step, kFromY, ~isWhite)) { return false; }
+
+        let squares[(kToY * 8) + kToX] = kingPiece;
+        let squares[(kFromY * 8) + kFromX] = 0;
+        let squares[(kToY * 8) + rToX] = rookPiece;
+        let squares[(kFromY * 8) + rFromX] = 0;
+
+        return true;
+    }
+
+    method int getPiece(int x, int y) { return squares[(y * 8) + x]; }
+
+    method boolean isSquareAttacked(int targetX, int targetY, boolean attackerIsWhite) {
+        var int x, y, p, absP;
+        let y = 0;
+        while (y < 8) {
+            let x = 0;
+            while (x < 8) {
+                let p = squares[(y * 8) + x];
+                if (~(p = 0)) {
+                    if (((attackerIsWhite & (p > 0)) | (~(attackerIsWhite) & (p < 0)))) {
+                        let absP = Math.abs(p);
+                        if (checkPieceMovementOnly(absP, p, x, y, targetX, targetY)) { return true; }
+                    }
+                }
+                let x = x + 1;
+            }
+            let y = y + 1;
+        }
+        return false;
+    }
+
+    method boolean checkPieceMovementOnly(int absP, int piece, int fX, int fY, int tX, int tY) {
+        var int target;
+        let target = squares[(tY * 8) + tX];
+        if (absP = 1) {
+            if (piece = 1) { return isValidWhitePawnMove(fX, fY, tX, tY, target); }
+            else { return isValidBlackPawnMove(fX, fY, tX, tY, target); }
+        }
+        if (absP = 2) { return isValidKnightMove(fX, fY, tX, tY); }
+        if (absP = 3) { return isValidBishopMove(fX, fY, tX, tY); }
+        if (absP = 4) { return isValidRookMove(fX, fY, tX, tY); }
+        if (absP = 5) { return (isValidRookMove(fX, fY, tX, tY) | isValidBishopMove(fX, fY, tX, tY)); }
+        if (absP = 6) { return isValidKingMove(fX, fY, tX, tY); }
+        return false;
+    }
+
+    method int findKingIndex(boolean isWhite) {
+        var int i, targetKing;
+        if (isWhite) { let targetKing = 6; } else { let targetKing = -6; }
+        let i = 0; while (i < 64) { if (squares[i] = targetKing) { return i; } let i = i + 1; }
+        return -1;
+    }
+
+    method boolean movePiece(int fromX, int fromY, int toX, int toY) {
+        var int fromIndex, toIndex, piece, targetPiece, absPiece, kingIndex, kingX, kingY;
+        var boolean valid, isWhite, isEnPassantMove;
+
+        let fromIndex = (fromY * 8) + fromX; let toIndex = (toY * 8) + toX;
+        let piece = squares[fromIndex]; let targetPiece = squares[toIndex];
+
+        if (fromIndex = toIndex) { return false; }
+        
+        let isWhite = (piece > 0); 
+        let absPiece = Math.abs(piece);
+        let isEnPassantMove = false;
+        let valid = false;
+
+        if ((absPiece = 1) & (toX = enPassantValidColumn) & (Math.abs(toX - fromX) = 1) & (targetPiece = 0)) {
+            if (isWhite) {
+                if (((~isFlipped & (fromY = 3) & (toY = 2)) | (isFlipped & (fromY = 4) & (toY = 5)))) { 
+                    let valid = true; let isEnPassantMove = true; 
+                }
+            } else {
+                if (((~isFlipped & (fromY = 4) & (toY = 5)) | (isFlipped & (fromY = 3) & (toY = 2)))) { 
+                    let valid = true; let isEnPassantMove = true; 
+                }
+            }
+        }
+
+        if (~isEnPassantMove) {
+            if (piece > 0) { if (targetPiece > 0) { return false; } }
+            if (piece < 0) { if (targetPiece < 0) { return false; } }
+            let valid = checkPieceMovementOnly(absPiece, piece, fromX, fromY, toX, toY);
+        }
+
+
+        return false;
+    }
+
+    method boolean isCheckmate(boolean isWhiteTurn) {
+        var int x, y, tx, ty, piece, target, kingIndex, kingX, kingY;
+        let kingIndex = findKingIndex(isWhiteTurn);
+        let kingY = kingIndex / 8; let kingX = kingIndex - (kingY * 8);
+        if (~isSquareAttacked(kingX, kingY, ~isWhiteTurn)) { return false; }
+        let y = 0;
+        while (y < 8) {
+            let x = 0;
+            while (x < 8) {
+                let piece = squares[(y * 8) + x];
+                if (((isWhiteTurn & (piece > 0)) | (~isWhiteTurn & (piece < 0)))) {
+                    let ty = 0;
+                    while (ty < 8) {
+                        let tx = 0;
+                        while (tx < 8) {
+                            if (checkPieceMovementOnly(Math.abs(piece), piece, x, y, tx, ty)) {
+                                let target = squares[(ty * 8) + tx];
+                                if (~((piece > 0) & (target > 0)) & ~((piece < 0) & (target < 0))) {
+                                    let squares[(ty * 8) + tx] = piece; let squares[(y * 8) + x] = 0;
+                                    let kingIndex = findKingIndex(isWhiteTurn);
+                                    if (~isSquareAttacked(kingIndex - (kingIndex/8*8), kingIndex/8, ~isWhiteTurn)) {
+                                        let squares[(y * 8) + x] = piece; let squares[(ty * 8) + tx] = target; return false;
+                                    }
+                                    let squares[(y * 8) + x] = piece; let squares[(ty * 8) + tx] = target;
+                                }
+                            }
+                            let tx = tx + 1;
+                        }
+                        let ty = ty + 1;
+                    }
+                }
+                let x = x + 1;
+            }
+            let y = y + 1;
+        }
+        return true; 
+    }
+
+    method boolean isValidWhitePawnMove(int fX, int fY, int tX, int tY, int target) {
+        var int dX, dY; let dX = tX - fX; 
+        if (~isFlipped) { let dY = fY - tY; } else { let dY = tY - fY; }
+        if (dX = 0) { 
+            if (target = 0) { 
+                if (dY = 1) { return true; } 
+                if (((~isFlipped & (fY = 6)) | (isFlipped & (fY = 1))) & (dY = 2)) { 
+                    if (~isFlipped) { if (squares[((fY - 1) * 8) + fX] = 0) { return true; } }
+                    else { if (squares[((fY + 1) * 8) + fX] = 0) { return true; } }
+                } 
+            } 
+        }
+        if ((dY = 1) & ((dX = 1) | (dX = -1))) { if (target < 0) { return true; } }
+        return false;
+    }
+
+    method boolean isValidBlackPawnMove(int fX, int fY, int tX, int tY, int target) {
+        var int dX, dY; let dX = tX - fX; 
+        if (~isFlipped) { let dY = tY - fY; } else { let dY = fY - tY; }
+        if (dX = 0) { 
+            if (target = 0) { 
+                if (dY = 1) { return true; } 
+                if (((~isFlipped & (fY = 1)) | (isFlipped & (fY = 6))) & (dY = 2)) { 
+                    if (~isFlipped) { if (squares[((fY + 1) * 8) + fX] = 0) { return true; } }
+                    else { if (squares[((fY - 1) * 8) + fX] = 0) { return true; } }
+                } 
+            } 
+        }
+        if ((dY = 1) & ((dX = 1) | (dX = -1))) { if (target > 0) { return true; } }
+        return false;
+    }
+
+    method boolean isValidKnightMove(int fX, int fY, int tX, int tY) {
+        var int dX, dY; let dX = Math.abs(tX - fX); let dY = Math.abs(tY - fY);
+        return (((dX = 1) & (dY = 2)) | ((dX = 2) & (dY = 1)));
+    }
+    method boolean isValidKingMove(int fX, int fY, int tX, int tY) {
+        return ((Math.abs(tX - fX) < 2) & (Math.abs(tY - fY) < 2));
+    }
+    method boolean isValidRookMove(int fX, int fY, int tX, int tY) {
+        var int stepX, stepY, cx, cy;
+        if (~(fX = tX) & ~(fY = tY)) { return false; }
+        let stepX = 0; let stepY = 0;
+        if (tX > fX) { let stepX = 1; } if (fX > tX) { let stepX = -1; }
+        if (tY > fY) { let stepY = 1; } if (fY > tY) { let stepY = -1; }
+        let cx = fX + stepX; let cy = fY + stepY;
+        while (~(cx = tX) | ~(cy = tY)) {
+            if (~(squares[(cy * 8) + cx] = 0)) { return false; }
+            let cx = cx + stepX; let cy = cy + stepY;
+        }
+        return true;
+    }
+    method boolean isValidBishopMove(int fX, int fY, int tX, int tY) {
+        var int dX, dY, stepX, stepY, cx, cy;
+        let dX = Math.abs(tX - fX); let dY = Math.abs(tY - fY);
+        if (~(dX = dY)) { return false; }
+        let stepX = 0; let stepY = 0;
+        if (tX > fX) { let stepX = 1; } if (fX > tX) { let stepX = -1; }
+        if (tY > fY) { let stepY = 1; } if (fY > tY) { let stepY = -1; }
+        let cx = fX + stepX; let cy = fY + stepY;
+        while (~(cx = tX) | ~(cy = tY)) {
+            if (~(squares[(cy * 8) + cx] = 0)) { return false; }
+            let cx = cx + stepX; let cy = cy + stepY;
+        }
+        return true;
+    }
+
+    method void draw(int curX, int curY, int selX, int selY) {
+        var int x, y, size, startX, startY, piece, tx1, ty1;
+        let size = 24; let startX = 160; let startY = 32;
+        let y = 0;
+        while (y < 8) {
+            let x = 0;
+            while (x < 8) {
+                let tx1 = startX + (x * size); let ty1 = startY + (y * size);
+                if (((x + y) - ((x + y) / 2 * 2)) = 0) {
+                    do Screen.setColor(false); 
+                    do Screen.drawRectangle(tx1, ty1, tx1 + size - 1, ty1 + size - 1);
+                } else {
+                    do Screen.setColor(true); 
+                    do Screen.drawRectangle(tx1, ty1, tx1 + size - 1, ty1 + size - 1); 
+                    do drawPattern(tx1, ty1, size, size);
+                }
+                if ((x = selX) & (y = selY)) {
+                    do Screen.setColor(true); 
+                    do Screen.drawRectangle(tx1 + 1, ty1 + 1, tx1 + size - 2, ty1 + size - 2);
+                }
+                let piece = squares[(y * 8) + x];
+                if (~(piece = 0)) { do drawVectorPiece(piece, tx1, ty1); }
+                if ((x = curX) & (y = curY)) {
+                    do Screen.setColor(true); 
+                    do Screen.drawCircle(tx1 + 12, ty1 + 12, 4);
+                    do Screen.setColor(false); 
+                    do Screen.drawCircle(tx1 + 12, ty1 + 12, 2);
+                }
+                let x = x + 1;
+            }
+            let y = y + 1;
+        }
+        return;
+    }
+
+    method void drawCoordinates(int startX, int startY, int size) {
+        var int i; let i = 0;
+        while (i < 8) {
+            do Output.moveCursor(((startY + (i * size) + 6) / 11) + 1, (startX - 16) / 8);
+            if (~isFlipped) { do Output.printChar(56 - i); } else { do Output.printChar(49 + i); }
+            let i = i + 1;
+        }
+        let i = 0;
+        while (i < 8) {
+            do Output.moveCursor(((startY + (8 * size) + 4) / 11) + 1, (startX + (i * size) + 8) / 8);
+            do Output.printChar(97 + i); let i = i + 1;
+        }
+        return;
+    }
+
+    method void drawPattern(int startX, int startY, int w, int h) {
+        var int x, y; let y = 0;
+        while (y < h) {
+            let x = 0;
+            while (x < w) {
+                if (((x + y) - ((x + y) / 2 * 2)) = 0) {
+                    do Screen.setColor(false); do Screen.drawRectangle(startX + x, startY + y, startX + x + 1, startY + y + 1);
+                }
+                let x = x + 4;
+            }
+            let y = y + 4;
+        }
+        return;
+    }
+
+    method void drawVectorPiece(int piece, int x, int y) {
+        var boolean isWhite; var int absP;
+        let isWhite = (piece > 0); let absP = Math.abs(piece);
+        do Screen.setColor(true);
+        if (absP = 1) {
+            do Screen.drawCircle(x + 12, y + 8, 4); do Screen.drawRectangle(x + 4, y + 15, x + 19, y + 20);
+            if (isWhite) { do Screen.setColor(false); do Screen.drawCircle(x + 12, y + 8, 2); do Screen.drawRectangle(x + 6, y + 17, x + 17, y + 18); }
+        }
+        if (absP = 3) {
+            do Screen.drawCircle(x + 12, y + 10, 5); do Screen.drawRectangle(x + 4, y + 17, x + 19, y + 20);
+            if (isWhite) { do Screen.setColor(false); do Screen.drawCircle(x + 12, y + 10, 3); do Screen.drawRectangle(x + 6, y + 18, x + 17, y + 19); do Screen.setColor(true); do Screen.drawRectangle(x + 11, y + 9, x + 13, y + 11); }
+            else { do Screen.setColor(false); do Screen.drawRectangle(x + 11, y + 9, x + 13, y + 11); }
+        }
+        if (absP = 2) {
+            do Screen.drawRectangle(x + 5, y + 5, x + 14, y + 20); do Screen.drawRectangle(x + 14, y + 7, x + 19, y + 13);
+            if (isWhite) { do Screen.setColor(false); do Screen.drawRectangle(x + 7, y + 7, x + 12, y + 18); do Screen.drawRectangle(x + 12, y + 9, x + 17, y + 11); }
+        }
+        if (absP = 4) {
+            do Screen.drawRectangle(x + 5, y + 4, x + 18, y + 20); do Screen.setColor(false); do Screen.drawRectangle(x + 8, y + 4, x + 10, y + 7); do Screen.drawRectangle(x + 13, y + 4, x + 15, y + 7);
+            if (isWhite) { do Screen.drawRectangle(x + 7, y + 9, x + 16, y + 18); }
+        }
+        if (absP = 5) {
+            do Screen.drawRectangle(x + 3, y + 8, x + 20, y + 20); do Screen.drawCircle(x + 5, y + 5, 2); do Screen.drawCircle(x + 12, y + 4, 2); do Screen.drawCircle(x + 19, y + 5, 2);
+            if (isWhite) { do Screen.setColor(false); do Screen.drawRectangle(x + 5, y + 10, x + 18, y + 18); }
+        }
+        if (absP = 6) {
+            do Screen.drawRectangle(x + 4, y + 7, x + 19, y + 20); do Screen.drawRectangle(x + 11, y + 2, x + 12, y + 6); do Screen.drawRectangle(x + 9, y + 4, x + 14, y + 5);
+            if (isWhite) { do Screen.setColor(false); do Screen.drawRectangle(x + 6, y + 9, x + 17, y + 18); }
+        }
+        return;
+    }
+
+    method void dispose() { do squares.dispose(); do Memory.deAlloc(this); return; }
+
+    method void drawStaticElements() {
+        var int size, startX, startY;
+        let size = 24; let startX = 160; let startY = 32;
+        do drawCoordinates(startX, startY, size);
+        return;
+    }
+    
+}
